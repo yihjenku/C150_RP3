@@ -6,18 +6,31 @@ import shutil
 
 def import_data():
 
-	# Change to iterate through all date directories
-	mypath = '2_3_16/'
-	date = mypath[:-1]
-	inputFiles = [ f for f in listdir(mypath) if isfile(join(mypath, f)) ]
+	# Iterate through all date directories
+	dates_path = 'Dates'
+	dateDirs = [ d for d in listdir(dates_path) if isdir(join(dates_path, d)) ]
+	for date in dateDirs:
 
-	for inputFile in inputFiles:
-		full_path = join(mypath, inputFile)
-		read_file(full_path)
+		inputFiles = [ f for f in listdir(join(dates_path, date)) if isfile(join(join(dates_path, date), f)) ]
+
+		piece_averages = []
+		average_headers = []
+
+		for inputFile in inputFiles:
+			full_path = join(join(dates_path, date), inputFile)
+			averages, average_headers = read_file(full_path)
+			piece_averages.append(averages)
+
+		write_ranking(date, piece_averages, average_headers)
 
 def read_file(full_path):
 
-	date = full_path.split('/')[0]
+	# full_path = Dates/m_d_yy/Name-#.csv
+	date = full_path.split('/')[1]
+	file_name = full_path.split('/')[2]
+	if(len(file_name.split('.')[0].split('-')) > 1):
+		name = file_name.split('.')[0].split('-')[0]
+		index = file_name.split('.')[0].split('-')[1]
 
 	with open(full_path, 'rU') as f:
 		reader = csv.DictReader(f)
@@ -55,16 +68,34 @@ def read_file(full_path):
 			if (header in non_aggregates and \
 				header_dict[header] != ''):
 
-				header_dict[header] = header_dict[header] / length
+				header_dict[header] = round(header_dict[header] / length, 2)
 
 			if (header in aggregates):
 				header_dict[header] = final_row[header]
 
+		# Update csv file with averages for each header
 		write_file(date, header_dict, full_path, header_list)
+
+		# Return important data points for ranking
+		focus_groups = ['energy_per_stroke', 'avg_power', \
+						'avg_calculated_power', 'stroke_length', \
+						'peak_force_pos', 'stroke_rate']
+		return_dict = {}
+		return_dict['name'] = name
+		return_dict['index'] = index
+
+		for group in focus_groups:
+			return_dict[group] = header_dict[group]
+
+		# Insert headers not given from RP3 data
+		focus_groups.insert(0, 'name')
+		focus_groups.insert(1, 'index')
+
+		return return_dict, focus_groups
 
 def write_file(date, averages, srcfile, fieldNames):
 
-	# Extract file name, last name, and index. Date value given.
+	# Extract file name, rower name, and index. Date value given.
 	file_name = srcfile.rsplit('/', 1)[-1]
 	last_name = file_name.split('-')[0]
 	index = file_name.split('-')[1]
@@ -90,6 +121,23 @@ def write_file(date, averages, srcfile, fieldNames):
 		writer = csv.DictWriter(f, fieldnames=fieldNames, restval="", \
 								dialect="excel", lineterminator='\n',)
 		writer.writerow(averages)
+
+def write_ranking(date, averages, headers):
+
+	dstdir = 'Rankings/'
+	file_name = date + ".csv"
+	final_path = join(dstdir, file_name)
+
+	averages = sorted(averages, key=lambda k: k['energy_per_stroke'], reverse=True) 
+
+	with open(final_path, 'w') as f:
+		writer = csv.DictWriter(f, fieldnames=headers, restval="", \
+								dialect = "excel", )
+		writer.writeheader()
+		for entry in averages:
+			writer.writerow(entry)
+
+
 
 def main():
 	import_data()
